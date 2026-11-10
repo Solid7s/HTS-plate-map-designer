@@ -1,5 +1,6 @@
 'use client';
 
+import { sitePath } from '@/lib/site-path';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { ArrowDownToLine, ArrowUpFromLine, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Dna, FlaskConical, Grid2X2, Layers, LayoutGrid, Plus, RotateCcw, SlidersHorizontal, Sparkles, Trash2, X } from 'lucide-react';
@@ -67,8 +68,8 @@ export default function Page() {
   const legend = mode === 'compound' ? e.compounds.map((c, i) => ({ label: `D${i + 1} · ${c.name}`, color: colors[i % colors.length] })) : mode === 'cell' ? e.cells.map((c, i) => ({ label: c.name, color: colors[i % colors.length] })) : [...new Set(e.cells.flatMap(c => parseNumbers(c.densities)))].map((d, i) => ({ label: `${d.toLocaleString()} cells/well`, color: colors[i % colors.length] }));
   return <div className="app-shell">
     <header className="topbar">
-      <a className="brand" href="/" aria-label="HTS plate map designer home"><span className="brand-icon"><Grid2X2 size={21} /></span><span>HTS<span className="brand-divider">/</span><span className="brand-sub">plate map designer</span></span></a>
-      <div className="top-actions"><a className="secondary-button" href="/simple"><Sparkles size={14} /> Simple mode</a><span className="private-badge"><span /> PERSONAL WORKSPACE</span><button className="icon-button" title="How to use this planner" aria-label="How to use this planner" onClick={() => setHelp(true)}><CircleHelp size={19} /></button></div>
+      <a className="brand" href={sitePath()} aria-label="HTS plate map designer home"><span className="brand-icon"><Grid2X2 size={21} /></span><span>HTS<span className="brand-divider">/</span><span className="brand-sub">plate map designer</span></span></a>
+      <div className="top-actions"><a className="secondary-button" href={sitePath('simple/')}><Sparkles size={14} /> Simple mode</a><span className="private-badge"><span /> PERSONAL WORKSPACE</span><button className="icon-button" title="How to use this planner" aria-label="How to use this planner" onClick={() => setHelp(true)}><CircleHelp size={19} /></button></div>
     </header>
     <div className="workspace">
       <aside className="sidebar" id="experiment-setup">

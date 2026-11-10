@@ -2,7 +2,7 @@
 
 A screening plate planner for 96-well (8 × 12) and 384-well (16 × 24) plates, with detailed experiment setup and a simplified count-based designer.
 
-[Open the public website](https://hts-plate-map-designer.nimble-wolf-1505.chatgpt.site) · [Open the simplified designer](https://hts-plate-map-designer.nimble-wolf-1505.chatgpt.site/simple)
+[Open the public website](https://solid7s.github.io/HTS-plate-map-designer/) · [Open the simplified designer](https://solid7s.github.io/HTS-plate-map-designer/simple/)
 
 No ChatGPT login is required to use the public site. Experiments are saved in the current browser; use JSON export/import to transfer detailed designs between devices or website origins. Local development and production servers bind to 127.0.0.1.
 
@@ -96,6 +96,19 @@ Planner tests audit assignment completeness, replicate uniqueness, edge exclusio
 
 Built with React and Vinext. Planning happens in your browser. Saved experiments are stored per browser and website origin; downloaded JSON provides portable persistence. Localhost storage does not automatically transfer to the hosted site. The Sites deployment uses a Cloudflare Worker; no connected apps or database are required.
 
+## GitHub Pages
+
+The public website is hosted at **https://solid7s.github.io/HTS-plate-map-designer/**. The repository's Website link points there. Pushes to `main` run `.github/workflows/pages.yml`: install pinned dependencies, run planner tests and TypeScript checks, build both pages, then deploy with GitHub Actions. No API key or server is needed. Browser AI still downloads its selected model directly after the user enables it.
+
+```sh
+npm run build:pages
+npm run preview:pages
+```
+
+The static output is `dist-pages/`. Preview at `http://127.0.0.1:5178/HTS-plate-map-designer/`; the simplified planner is under `simple/`. `vite.pages.config.ts` sets the repository base path, including the AI worker and navigation links. The static entrypoints reuse the same planner components and logic as the server build.
+
+Browser storage is separate for the GitHub Pages and ChatGPT Sites origins. Export/import detailed experiment JSON to move designs; re-enter the five simplified counts on a new origin. The earlier [ChatGPT Sites copy](https://hts-plate-map-designer.nimble-wolf-1505.chatgpt.site) is still available, but GitHub pushes only update GitHub Pages.
+
 ## ChatGPT Sites
 
-The project identity is stored in `.openai/hosting.json`. Build and publish through the Sites source workflow, preserving the current public audience. The GitHub repository is public too. Pushing source to GitHub does not automatically redeploy the website.
+The project identity is stored in `.openai/hosting.json`. Build and publish through the Sites source workflow, preserving the current public audience. The GitHub repository is public too. Pushing source to GitHub deploys GitHub Pages; updating the separate ChatGPT Sites copy still requires its source workflow.

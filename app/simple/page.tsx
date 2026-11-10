@@ -1,5 +1,6 @@
 'use client';
 
+import { sitePath } from '@/lib/site-path';
 import { useEffect, useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
 import { ArrowDownToLine, ArrowRight, Check, ChevronLeft, ChevronRight, Grid2X2, SlidersHorizontal, Sparkles } from 'lucide-react';
@@ -136,8 +137,8 @@ export default function SimplePage() {
 
   return <div className="quick-app">
     <header className="topbar">
-      <a className="brand" href="/simple"><span className="brand-icon"><Grid2X2 size={21} /></span><span>HTS<span className="brand-divider">/</span><span className="brand-sub">plate map designer</span></span></a>
-      <a className="secondary-button" href="/"><SlidersHorizontal size={14} /><span>Detailed designer</span></a>
+      <a className="brand" href={sitePath('simple/')}><span className="brand-icon"><Grid2X2 size={21} /></span><span>HTS<span className="brand-divider">/</span><span className="brand-sub">plate map designer</span></span></a>
+      <a className="secondary-button" href={sitePath()}><SlidersHorizontal size={14} /><span>Detailed designer</span></a>
     </header>
     <main className="quick-main">
       <div className="quick-intro"><div className="eyebrow">QUICK PLANNER</div><h1>Your screen, simplified.</h1><p>Compare cell lines on the same compound, with controls on every plate.</p></div>
@@ -168,7 +169,7 @@ export default function SimplePage() {
         <div className="quick-legend" aria-label="Map legend">{Array.from({ length: legendCount }, (_, i) => <span key={i}><i style={{ background: colorAt(i) }} />{legendLabel} {i + 1}</span>)}{generated.screenControls !== false && <><span><i style={{ background: controlColors.positive }} />PC · Positive control</span><span><i style={{ background: controlColors.negative }} />NC · Negative control</span></>}<span><i className="quick-empty" />Empty</span>{generated.excludeEdges && <span><i className="quick-excluded" />Excluded</span>}</div>
         <p className="quick-results-note">D1, D2, … identify the test compound; PC and NC are control placeholders for you to define. Replicate sets stay intact. A cell line’s full dose series and controls stay on the same plate when they fit. Larger series continue with fresh controls. Cell positions repeat across compounds. Select a well for its cell line, density, dose, and replicate.</p>
       </section>
-      <footer className="quick-footer"><span><Check size={14} />{saveState}</span><a href="/">Need names, actual values, or vehicle controls? Open the detailed designer <ArrowRight size={14} /></a></footer>
+      <footer className="quick-footer"><span><Check size={14} />{saveState}</span><a href={sitePath()}>Need names, actual values, or vehicle controls? Open the detailed designer <ArrowRight size={14} /></a></footer>
     </main>
   </div>;
 }
