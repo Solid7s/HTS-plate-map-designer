@@ -1,4 +1,4 @@
-# HTS-plate-map-designer
+# HTS-plate-map-designer · v2.0
 
 A screening plate planner for 96-well (8 × 12) and 384-well (16 × 24) plates, with detailed experiment setup and a simplified count-based designer.
 
@@ -22,6 +22,18 @@ npm run dev -- --hostname 127.0.0.1 --port 5178
 ```
 
 ## Design a screen
+
+### Optional browser AI
+
+In the simplified designer, select **Try local AI**, then **Enable local AI**. Describe the experiment and select **Review AI settings**. Edit the extracted counts, plate format, and edge/control options before choosing **Apply settings & generate maps**. Unspecified settings retain the form's current values. Unsupported requests are shown as review notes and require acknowledgment. AI never edits the maps automatically; the existing planner checks the reviewed inputs and generates the well assignments.
+
+The model is **Qwen2.5-1.5B Instruct**, quantized to 4 bits, running through **WebLLM 0.2.87** in a Web Worker. Browsers with `shader-f16` use `Qwen2.5-1.5B-Instruct-q4f16_1-MLC`; other WebGPU browsers use its `q4f32_1` counterpart. The configured context is 2,048 tokens and responses are constrained by a JSON schema, then independently validated. A separate checker handles literal count phrases, plate format, and explicit edge/control options, and preserves settings the description does not mention. Physical amounts without explicit level counts stay unchanged and are flagged for manual review. The 1.5B model keeps the download and GPU requirements modest; it is an input assistant, not a biological reasoning or plate-optimization engine.
+
+The initial model weight download is approximately 870 MB for the f16 variant, plus tokenizer/runtime files. Allow roughly 2 GB GPU memory; actual requirements and speed depend on the browser, model variant, and device. Downloads start only after **Enable local AI**. Model files come from Hugging Face and the compiled runtime from GitHub. Descriptions are processed in the browser and are neither sent to an inference service nor saved by this feature. Browser storage caches the model when available. **Disable AI** releases the worker and its GPU resources; clearing this site's browser data removes its cache. Model caching alone does not make the whole website available offline.
+
+The feature needs WebGPU and a secure origin (HTTPS or localhost). Unsupported browsers, download/storage failures, and unavailable GPU memory leave the manual planner usable. AI can misinterpret details: review every field. Physical densities/doses, named entities, custom well positions, randomization, and alternative control schemes are not applied by the count-only assistant. Generation and download can be cancelled; incomplete, oversized, or invalid responses are rejected.
+
+References: [Qwen model card](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct), [WebLLM](https://github.com/mlc-ai/web-llm), [WebLLM model configuration](https://github.com/mlc-ai/web-llm/blob/main/src/config.ts). These projects use Apache-2.0 licenses; their upstream license notices apply to their code and model artifacts.
 
 ### Simplified version
 
@@ -77,10 +89,13 @@ Planner tests audit assignment completeness, replicate uniqueness, edge exclusio
 - `lib/compound-planner.ts`: compound-focused plate allocation with matched controls and complete replicate sets.
 - `lib/simple-planner.ts`: count-based setup validation, candidate generation, and plate-format comparisons.
 - `tests/planner.test.mjs`: assignment correctness tests.
+- `components/local-ai-planner.tsx`: opt-in download, description, editable review, and error/fallback UI.
+- `lib/ai-experiment.ts`: extraction schema, prompt, and independent response validation.
+- `lib/browser-ai.ts` and `workers/plate-ai.worker.ts`: cancellable browser inference with no server AI endpoint.
 - `AGENTS.md`: hosting authorization and local development instructions.
 
 Built with React and Vinext. Planning happens in your browser. Saved experiments are stored per browser and website origin; downloaded JSON provides portable persistence. Localhost storage does not automatically transfer to the hosted site. The Sites deployment uses a Cloudflare Worker; no connected apps or database are required.
 
 ## ChatGPT Sites
 
-The project identity is stored in `.openai/hosting.json`. Build and publish through the Sites source workflow, preserving the current public audience. Pushing source to GitHub does not automatically redeploy the website.
+The project identity is stored in `.openai/hosting.json`. Build and publish through the Sites source workflow, preserving the current public audience. The GitHub repository is public too. Pushing source to GitHub does not automatically redeploy the website.

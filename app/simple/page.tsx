@@ -7,6 +7,7 @@ import { colors, csvForPlan, formatCoveragePercent, getWellCoverage, isEdge } fr
 import type { Experiment, LayoutKind, Plan, Well } from '@/lib/planner';
 import { buildSimpleDesign, defaultSimpleSetup, simpleFields } from '@/lib/simple-planner';
 import type { SimpleSetup } from '@/lib/simple-planner';
+import LocalAiPlanner from '@/components/local-ai-planner';
 import './simple.css';
 
 const STORAGE = 'hts-plate-map-designer.simple.v1';
@@ -124,10 +125,11 @@ export default function SimplePage() {
   function applySetup(setup: SimpleSetup) {
     const result = buildSimpleDesign(setup);
     setErrors(result.errors);
-    if (!result.experiment) return;
+    if (!result.experiment) return result.errors;
     setDraft({ ...setup }); setGenerated({ ...setup }); setDesign(result); setGeneration(value => value + 1);
     try { localStorage.setItem(STORAGE, JSON.stringify(setup)); setSaveState('Quick setup saved on this device'); }
     catch { setSaveState('Device storage unavailable · CSV exports still work'); }
+    return [];
   }
   function generate(event: FormEvent<HTMLFormElement>) { event.preventDefault(); applySetup(draft); }
   function update(patch: Partial<SimpleSetup>) { setDraft(previous => ({ ...previous, ...patch })); setErrors([]); }
@@ -139,6 +141,7 @@ export default function SimplePage() {
     </header>
     <main className="quick-main">
       <div className="quick-intro"><div className="eyebrow">QUICK PLANNER</div><h1>Your screen, simplified.</h1><p>Compare cell lines on the same compound, with controls on every plate.</p></div>
+      <LocalAiPlanner current={draft} onApply={applySetup} />
       <form className="quick-form" onSubmit={generate} noValidate>
         <div className="quick-form-heading"><h2><span>01</span> Describe your screen</h2><button type="button" className="secondary-button" onClick={() => applySetup({ ...defaultSimpleSetup, cellLines: '20', compounds: '40', format: 384 })}>Try 20 cells × 40 compounds</button></div>
         <div className="quick-fields">{simpleFields.map((field, index) => <label className="quick-field" key={field.key} htmlFor={`quick-${field.key}`}>

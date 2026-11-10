@@ -374,3 +374,66 @@ test('large-screen planning compares formats and rejects oversized designs inclu
   assert.equal(repeated.experiment, null);
   assert.match(repeated.errors[0], /repeated controls/);
 });
+
+// Browser AI is untrusted input: validate independently before generating maps.
+const { parseAiProposal, checkAiExtraction, validateAiPrompt, AI_PROMPT_LIMIT } = await import('../lib/ai-experiment.ts');
+const aiResult = patch => JSON.stringify({ cellLines: null, densities: null, compounds: null, concentrations: null, replicates: null, format: null, excludeEdges: null, screenControls: null, notes: [], ...patch });
+test('AI extraction preserves unspecified settings and never mutates the current experiment', () => {
+  const current = { ...defaultSimpleSetup, densities: '2', concentrations: '4', format: 384, screenControls: false };
+  const before = structuredClone(current);
+  const result = parseAiProposal(aiResult({ cellLines: 6, compounds: 10, replicates: 2 }), current);
+  assert.deepEqual(current, before);
+  assert.equal(result.setup.densities, '2'); assert.equal(result.setup.concentrations, '4');
+  assert.equal(result.setup.format, 384); assert.equal(result.setup.screenControls, false);
+  assert.equal(result.setup.cellLines, '6'); assert.equal(result.setup.replicates, '2');
+  assert.deepEqual(result.specified, ['cellLines', 'compounds', 'replicates']);
+});
+test('AI settings produce the same complete 20-by-40 design as manual inputs', () => {
+  const result = parseAiProposal(aiResult({ cellLines: 20, compounds: 40, densities: 1, concentrations: 1, replicates: 3, format: 384, excludeEdges: false, screenControls: true }), defaultSimpleSetup);
+  assert.deepEqual(result.errors, []);
+  const design = buildSimpleDesign(result.setup);
+  assert.deepEqual(design.errors, []);
+  for (const plan of design.plans) {
+    assert.equal(plan.plates.length, 40); assert.equal(plan.sampleWells, 2400); assert.equal(plan.controlWells, 4800);
+  }
+});
+test('AI counts outside supported limits remain visible errors rather than silently clamped', () => {
+  for (const patch of [{cellLines:31}, {compounds:51}, {replicates:0}, {densities:-1}, {concentrations:2500}]) {
+    assert.ok(parseAiProposal(aiResult(patch), defaultSimpleSetup).errors.length);
+  }
+  assert.match(parseAiProposal(aiResult({cellLines:30,compounds:50,concentrations:30,replicates:6}),defaultSimpleSetup).errors.join(' '), /20,000/);
+});
+test('AI rejects malformed, extra, missing, non-integer and mistyped settings', () => {
+  for (const text of ['[]','null','{}','```json\n{}\n```','{"cellLines":20', aiResult({cellLines:'20'}),aiResult({cellLines:2.5}),aiResult({format:1536}),aiResult({excludeEdges:'false'}),aiResult({screenControls:1}),aiResult({notes:'fine'}),aiResult({extra:'ignored'}),aiResult({notes:['x'.repeat(501)]})]) {
+    assert.throws(() => parseAiProposal(text, defaultSimpleSetup));
+  }
+});
+test('AI keeps unsupported requests as review notes and handles explicit false values', () => {
+  const result = parseAiProposal(aiResult({screenControls:false,excludeEdges:false,notes:['Random well placement is not applied.']}), {...defaultSimpleSetup,excludeEdges:true});
+  assert.equal(result.setup.screenControls,false); assert.equal(result.setup.excludeEdges,false);
+  assert.deepEqual(result.notes,['Random well placement is not applied.']);
+  assert.throws(()=>parseAiProposal(aiResult({}),defaultSimpleSetup), /No experiment/);
+});
+test('AI prompt size is bounded before model inference', () => {
+  assert.throws(()=>validateAiPrompt('  '));
+  assert.throws(()=>validateAiPrompt('x'.repeat(AI_PROMPT_LIMIT+1)));
+  assert.equal(validateAiPrompt('  three cell lines  '), 'three cell lines');
+});
+
+test('AI literal checks preserve absent settings and verify explicit counts and options', () => {
+  const guessed = aiResult({cellLines:4,densities:10,compounds:3,concentrations:1,replicates:1,format:96,excludeEdges:false,screenControls:true});
+  const checked = JSON.parse(checkAiExtraction(guessed,'Six cell lines and ten compounds, in duplicate.'));
+  assert.equal(checked.cellLines,6); assert.equal(checked.compounds,10); assert.equal(checked.replicates,2);
+  for (const key of ['densities','concentrations','format','excludeEdges','screenControls']) assert.equal(checked[key],null,key);
+  const full = JSON.parse(checkAiExtraction(guessed,'20 cell lines, 40 compounds, one density and one concentration, triplicate on 384-well plates. Use the outer wells. Positive and negative controls.'));
+  assert.deepEqual(full,{cellLines:20,densities:1,compounds:40,concentrations:1,replicates:3,format:384,excludeEdges:false,screenControls:true,notes:[]});
+});
+test('AI physical values and unsupported controls require manual review', () => {
+  const checked = JSON.parse(checkAiExtraction(aiResult({densities:3000,concentrations:2,screenControls:true}), 'Seed at 3000 cells per well and 2 micromolar. Only negative controls, six wells per plate.'));
+  assert.equal(checked.densities,null); assert.equal(checked.concentrations,null); assert.equal(checked.screenControls,null);
+  assert.equal(checked.notes.length,3);
+  const edges = JSON.parse(checkAiExtraction(aiResult({excludeEdges:false,screenControls:true}), 'Exclude perimeter wells. No controls.'));
+  assert.equal(edges.excludeEdges,true); assert.equal(edges.screenControls,false);
+  const ambiguous = JSON.parse(checkAiExtraction(aiResult({excludeEdges:true}), 'Do not exclude outer wells.'));
+  assert.equal(ambiguous.excludeEdges,null); assert.equal(ambiguous.notes.length,1);
+});
