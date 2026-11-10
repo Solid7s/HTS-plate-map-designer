@@ -1,6 +1,10 @@
 # HTS-plate-map-designer
 
-A screening plate planner for 96-well (8 × 12) and 384-well (16 × 24) plates. ChatGPT Sites hosting is authorized; preserve owner-private access. Local development and production servers bind to 127.0.0.1.
+A screening plate planner for 96-well (8 × 12) and 384-well (16 × 24) plates, with detailed experiment setup and a simplified count-based designer.
+
+[Open the public website](https://hts-plate-map-designer.nimble-wolf-1505.chatgpt.site) · [Open the simplified designer](https://hts-plate-map-designer.nimble-wolf-1505.chatgpt.site/simple)
+
+No ChatGPT login is required to use the public site. Experiments are saved in the current browser; use JSON export/import to transfer detailed designs between devices or website origins. Local development and production servers bind to 127.0.0.1.
 
 ## Run locally
 
@@ -79,4 +83,4 @@ Built with React and Vinext. Planning happens in your browser. Saved experiments
 
 ## ChatGPT Sites
 
-The project identity is stored in `.openai/hosting.json`. Build and publish through the Sites source workflow, preserving the current private audience.
+The project identity is stored in `.openai/hosting.json`. Build and publish through the Sites source workflow, preserving the current public audience. Pushing source to GitHub does not automatically redeploy the website.
