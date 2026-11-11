@@ -87,6 +87,69 @@ test('Desktop 3.png geometry: narrow row blocks keep the orange cell line on the
   assert.ok(orange.filter(w => w.compoundIndex >= 2).every(w => w.row >= 4));
 });
 
+test('Desktop 1.png geometry: the purple cell line uses the matching block at the far right', () => {
+  const e = { ...defaultExperiment, excludeEdges: true, blockWidth: 1, replicates: 2,
+    cells: Array.from({ length: 5 }, (_, i) => ({ id: `c${i + 1}`, name: `Cell line ${i + 1}`, densities: '2500' })),
+    compounds: Array.from({ length: 5 }, (_, i) => ({ id: `d${i + 1}`, name: `Compound ${i + 1}`, concentrations: '1' })),
+  };
+  const plan = makePlan(e, 'tall');
+  audit(e, plan);
+  assert.equal(plan.plates.length, 1);
+  const purple = plan.plates[0].wells.filter(w => w?.cellId === 'c2');
+  assert.deepEqual(purple.map(w => w.address), ['B10', 'B11', 'C10', 'C11', 'D10', 'D11', 'E10', 'E11', 'F10', 'F11']);
+  const startColumns = { c1: 1, c2: 9, c3: 3, c4: 5, c5: 7 };
+  for (const well of plan.plates[0].wells.filter(Boolean)) {
+    assert.equal(well.row, well.compoundIndex + 1);
+    assert.equal(well.col, startColumns[well.cellId] + well.replicate - 1);
+  }
+  assert.ok(plan.plates[0].wells.slice(6 * 12, 7 * 12).every(w => w === null), 'row G should be free');
+  assert.equal(getWellCoverage(plan, 0).plate.filled, 50);
+  assert.equal(formatCoveragePercent(getWellCoverage(plan, 0).plate.percent), '83.3');
+});
+
+test('matching complete cell-line patterns also fill available space with two cells and on 384-well plates', () => {
+  for (const [format, replicates, compoundCount] of [[96, 2, 5], [384, 1, 13]]) for (const cellCount of [2, 5]) {
+    const e = { ...defaultExperiment, format, excludeEdges: true, blockWidth: 1, replicates,
+      cells: Array.from({ length: cellCount }, (_, i) => ({ id: `c${i}`, name: `Cell ${i}`, densities: '2500' })),
+      compounds: Array.from({ length: compoundCount }, (_, i) => ({ id: `d${i}`, name: `Drug ${i}`, concentrations: '1' })),
+    };
+    const plan = makePlan(e, 'tall');
+    audit(e, plan);
+    assert.equal(plan.plates.length, 1);
+    for (const cell of e.cells) {
+      const wells = plan.plates[0].wells.filter(w => w?.cellId === cell.id);
+      const left = Math.min(...wells.map(w => w.col));
+      for (const well of wells) {
+        assert.equal(well.row, well.compoundIndex + 1);
+        assert.equal(well.col - left, well.replicate - 1);
+      }
+    }
+  }
+});
+
+test('pattern alignment preserves density levels, doses, controls and partial-block blanks in every layout', () => {
+  for (const [kind, format, replicates] of [['wide', 96, 1], ['tall', 96, 1], ['balanced', 384, 3]]) {
+    const e = { ...defaultExperiment, format, excludeEdges: true, replicates, blockWidth: 2, vehicleControls: true,
+      cells: Array.from({ length: 3 }, (_, i) => ({ id: `c${i}`, name: `Cell ${i}`, densities: `${1000 * (i + 1)},${5000 * (i + 1)}` })),
+      compounds: [{ id: 'd0', name: 'Drug 1', concentrations: '0.1,1' }, { id: 'd1', name: 'Drug 2', concentrations: '1' }],
+    };
+    const plan = makePlan(e, kind);
+    audit(e, plan);
+    assert.equal(plan.plates.length, 1);
+    const patterns = e.cells.map(cell => {
+      const wells = plan.plates[0].wells.filter(w => w?.cellId === cell.id);
+      const top = Math.min(...wells.map(w => w.row)), left = Math.min(...wells.map(w => w.col));
+      if (kind === 'balanced') for (const density of parseNumbers(cell.densities)) for (const compoundId of ['d1', 'vehicle']) {
+        const block = wells.filter(w => w.density === density && w.compoundId === compoundId);
+        const r = Math.min(...block.map(w => w.row)), c = Math.min(...block.map(w => w.col));
+        assert.equal(plan.plates[0].wells[(r + 1) * plan.cols + c + 1], null, 'the fourth slot of a triplicate block must remain blank');
+      }
+      return wells.map(w => [w.row - top, w.col - left, parseNumbers(cell.densities).indexOf(w.density), w.compoundId, w.concentration, w.replicate]);
+    });
+    for (const pattern of patterns) assert.deepEqual(pattern, patterns[0]);
+  }
+});
+
 test('row overflow onto a new plate retains a cell line’s horizontal region when space permits', () => {
   const e = { ...defaultExperiment, excludeEdges: true, blockWidth: 1,
     cells: [{ id: 'first', name: 'First', densities: '1000, 2000, 3000, 4000' }, { id: 'second', name: 'Second', densities: '1000, 2000' }],

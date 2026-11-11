@@ -71,6 +71,73 @@ export function validateExperiment(value: unknown): string[] {
 }
 export function dimensions(format: number) { return format === 384 ? { rows: 16, cols: 24 } : { rows: 8, cols: 12 }; }
 export function isEdge(row: number, col: number, rows: number, cols: number) { return row === 0 || col === 0 || row === rows - 1 || col === cols - 1; }
+type PlacedBlock = {
+  p: number; r: number; c: number; width: number; height: number;
+  wells: (Condition & { replicate: number })[];
+};
+function alignCellPatterns(blocks: PlacedBlock[], occupied: boolean[][], rows: number, cols: number, margin: number) {
+  // Greedy placement can strand one cell line in a narrow leftover strip.
+  // Reuse the most common complete-cell pattern if it fits on the same plate,
+  // without moving other cell lines or changing any dose-series block shapes.
+  const cells = new Map<string, PlacedBlock[]>();
+  for (const block of blocks) {
+    const id = block.wells[0].cellId;
+    if (!cells.has(id)) cells.set(id, []);
+    cells.get(id)!.push(block);
+  }
+  type Pattern = { key: string; offsets: { r: number; c: number }[]; height: number; width: number; count: number };
+  type Family = { patterns: Map<string, Pattern>; cells: { blocks: PlacedBlock[]; pattern: Pattern }[] };
+  const families = new Map<string, Family>();
+  for (const cell of cells.values()) {
+    // A cell spanning plates must retain its established continuation region.
+    if (cell.some(block => block.p !== cell[0].p)) continue;
+    const recipe = JSON.stringify(cell.map(block => [block.width, block.height, block.wells.length]));
+    if (!families.has(recipe)) families.set(recipe, { patterns: new Map(), cells: [] });
+    const family = families.get(recipe)!;
+    const top = Math.min(...cell.map(block => block.r)), left = Math.min(...cell.map(block => block.c));
+    const offsets = cell.map(block => ({ r: block.r - top, c: block.c - left }));
+    const key = JSON.stringify(offsets);
+    if (!family.patterns.has(key)) family.patterns.set(key, {
+      key, offsets, count: 0,
+      height: Math.max(...cell.map(block => block.r + block.height)) - top,
+      width: Math.max(...cell.map(block => block.c + block.width)) - left,
+    });
+    const pattern = family.patterns.get(key)!;
+    pattern.count++;
+    family.cells.push({ blocks: cell, pattern });
+  }
+  function mark(block: PlacedBlock, value: boolean) {
+    for (let dr = 0; dr < block.height; dr++) for (let dc = 0; dc < block.width; dc++) occupied[block.p][(block.r + dr) * cols + block.c + dc] = value;
+  }
+  for (const family of families.values()) {
+    // Stable ties favor the first cell's pattern, including two-cell designs.
+    const preferred = [...family.patterns.values()].sort((a, b) => b.count - a.count)[0];
+    for (const cell of family.cells) {
+      if (cell.pattern.key === preferred.key) continue;
+      const plate = cell.blocks[0].p;
+      cell.blocks.forEach(block => mark(block, false));
+      let destination: { r: number; c: number } | undefined;
+      for (let r = margin; r <= rows - margin - preferred.height && !destination; r++) {
+        for (let c = margin; c <= cols - margin - preferred.width; c++) {
+          const free = cell.blocks.every((block, i) => {
+            const offset = preferred.offsets[i];
+            // Include the unassigned tail of a partial rectangular block.
+            for (let dr = 0; dr < block.height; dr++) for (let dc = 0; dc < block.width; dc++) {
+              if (occupied[plate][(r + offset.r + dr) * cols + c + offset.c + dc]) return false;
+            }
+            return true;
+          });
+          if (free) { destination = { r, c }; break; }
+        }
+      }
+      if (destination) cell.blocks.forEach((block, i) => {
+        block.r = destination.r + preferred.offsets[i].r;
+        block.c = destination.c + preferred.offsets[i].c;
+      });
+      cell.blocks.forEach(block => mark(block, true));
+    }
+  }
+}
 export function makePlan(e: Experiment, kind: LayoutKind): Plan {
   const errors = validateExperiment(e);
   if (errors.length) throw new Error(errors[0]);
@@ -103,7 +170,7 @@ export function makePlan(e: Experiment, kind: LayoutKind): Plan {
   const cellBounds = new Map<string, Map<number, Bounds>>();
   const lastPlateForCell = new Map<string, number>();
   const continuationCenters = new Map<string, Map<number, number>>();
-  let blocks = 0;
+  const blocks: PlacedBlock[] = [];
   function newPlate() { plates.push({ wells: Array(rows * cols).fill(null) }); occupied.push(Array(rows * cols).fill(false)); }
   for (const group of groups) {
     const cellId = group[0].cellId;
@@ -171,15 +238,16 @@ export function makePlan(e: Experiment, kind: LayoutKind): Plan {
       });
       lastPlateForCell.set(cellId, p);
       for (let dr = 0; dr < blockH; dr++) for (let dc = 0; dc < blockW; dc++) occupied[p][(r + dr) * cols + c + dc] = true;
-      chunk.forEach((condition, i) => {
-        const layoutRow = r + Math.floor(i / blockW), layoutCol = c + i % blockW;
-        const row = transposed ? layoutCol : layoutRow, col = transposed ? layoutRow : layoutCol;
-        plates[p].wells[row * physical.cols + col] = { ...condition, row, col, address: `${String.fromCharCode(65 + row)}${col + 1}`, plate: p + 1 };
-      });
-      blocks++;
+      blocks.push({ p, r, c, width: blockW, height: blockH, wells: chunk });
     }
   }
-  return { kind, plates, conditions, sampleWells, controlWells, usable: height * width, rows: physical.rows, cols: physical.cols, blocks };
+  alignCellPatterns(blocks, occupied, rows, cols, margin);
+  for (const { p, r, c, width: blockW, wells } of blocks) wells.forEach((condition, i) => {
+    const layoutRow = r + Math.floor(i / blockW), layoutCol = c + i % blockW;
+    const row = transposed ? layoutCol : layoutRow, col = transposed ? layoutRow : layoutCol;
+    plates[p].wells[row * physical.cols + col] = { ...condition, row, col, address: `${String.fromCharCode(65 + row)}${col + 1}`, plate: p + 1 };
+  });
+  return { kind, plates, conditions, sampleWells, controlWells, usable: height * width, rows: physical.rows, cols: physical.cols, blocks: blocks.length };
 }
 export function csvForPlan(plan: Plan, e: Experiment, options: { levels?: boolean; plateCompound?: boolean } = {}): string {
   const quote = (v: unknown) => { let s = String(v ?? ''); if (/^[=+@\-\t\r]/.test(s)) s = "'" + s; return '"' + s.replaceAll('"', '""') + '"'; };
